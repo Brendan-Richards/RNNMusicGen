@@ -3,29 +3,43 @@ import os
 import numpy as np
 from pypianoroll import Multitrack, Track
 from matplotlib import pyplot as plt
+import pickle
 
 class MidiParser:
 
     def parse_files(self, directory, track_type):
         data_x = []
         data_y = []
-
+        total = 0
+        bytes = 0
         for file in os.listdir(directory):
 
             print(directory + '/' + file)
-            piano_roll = self.parse_file(directory + '/' + file, track_type)
+            try:
+                piano_roll = self.parse_file(directory + '/' + file, track_type)
+            except:
+                print('couldn\'t parse file for some reason. skipping')
+                continue
+            if piano_roll is None:
+                continue
             temp_x, temp_y = self.get_training_data_multi(piano_roll)
-            print('temp_x shape:', temp_x.shape)
-            print('temp_y shape:', temp_y.shape)
+            total += len(temp_x)
+            bytes += temp_x.nbytes
+            # print('temp_x shape:', temp_x.shape)
+            # print('temp_y shape:', temp_y.shape)
             if len(data_x) == 0 and len(data_y) == 0:
-                data_x = temp_x
-                data_y = temp_y
+                data_x.append(temp_x)
+                data_y.append(temp_y)
             else:
-                data_x = np.concatenate([data_x, temp_x], axis=0)
-                data_y = np.concatenate([data_y, temp_y], axis=0)
-            print('data_x shape:', data_x.shape)
-            print('data_y shape:', data_y.shape)
-        return data_x, data_y
+                data_x.append(temp_x)
+                data_y.append(temp_y)
+                # data_x = np.concatenate([data_x, temp_x], axis=0)
+                # data_y = np.concatenate([data_y, temp_y], axis=0)
+            print('num examples:', total)
+            print('size:', (bytes/1073741824), 'Gigabytes')
+            #print('data shape:', data_x.shape)
+        print('concatenating: ')
+        return np.concatenate(data_x, axis=0), np.concatenate(data_y, axis=0)
 
     def parse_file(self, filename, track_type):
         return self.midi2piano_roll(filename, track_type)
@@ -46,6 +60,7 @@ class MidiParser:
                 return track.pianoroll
 
         print('couldn\'t find {} track in midi file {}'.format(track_type, filename))
+        return None
 
 
     def get_training_data_single(self, piano_roll):
@@ -62,7 +77,7 @@ class MidiParser:
         return np.array(examples), np.array(labels)
 
     def get_training_data_multi(self, piano_roll):
-        example_length = 10
+        example_length = 100
         examples = []
         labels = []
 
@@ -73,19 +88,30 @@ class MidiParser:
             i += example_length + 1
         return np.array(examples), np.array(labels)
 
-if __name__=="__main__":
+def make_rock_guitar_data():
     parser = MidiParser()
-    #piano_roll = parser.parse_file('2MinutesToMidnight.mid', 'piano')
-    #print(type(piano_roll))
-    #print(piano_roll.shape)
-    np.set_printoptions(threshold=sys.maxsize)
+    data_x, data_y = parser.parse_files('midi_training_files/rock', 'guitar')
 
-   # data_x, data_y = parser.get_training_data_multi(piano_roll)
-    data_x, data_y = parser.parse_files('test_files', 'guitar')
-    # with open('x.txt', 'w') as f:
-    #     f.write(np.array2string(train_x[0].T[:, :]))
-    # with open('y.txt', 'w') as f:
-    #     f.write(np.array2string(train_y[0].T[:, :]))
+    with open('data_x.pkl', 'wb') as file:
+        pickle.dump(data_x, file, protocol=4)
+    with open('data_y.pkl', 'wb') as file:
+        pickle.dump(data_y, file, protocol=4)
+
     print('training data shape:', data_x.shape)
     print('training label shape:', data_y.shape)
+
+def load_rock_guitar_data():
+    with open('pickles/data_rock_guitar_x.pkl', 'rb') as file:
+        data_x = pickle.load(file)
+    with open('pickles/data_rock_guitar_y.pkl', 'rb') as file:
+        data_y = pickle.load(file)
+
+    return data_x, data_y
+
+if __name__=="__main__":
+    make_rock_guitar_data()
+
+
+
+
 
